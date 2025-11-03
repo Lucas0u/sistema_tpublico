@@ -1,0 +1,20 @@
+# Ambiente virtual
+.venv/
+venv/
+env/
+
+# Arquivos do Python
+__pycache__/
+*.pyc
+*.pyo
+*.pyd
+.Python
+
+# Arquivos de dados (opcional - pode remover se quiser compartilhar)
+dados/
+*.pkl
+*.csv
+
+# Sistema
+.DS_Store
+Thumbs.db

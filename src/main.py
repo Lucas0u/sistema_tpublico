@@ -1,9 +1,5 @@
 import webbrowser
 import os
-import sys
-
-
-sys.path.append(os.path.join(os.path.dirname(__file__), '..'))
 
 def executar_sistema():
     """Executa todo o sistema"""
@@ -13,22 +9,22 @@ def executar_sistema():
     print("=" * 60)
     
     try:
-        # Executar coleta - IMPORT DIRETO
+        
         print("\n1️⃣  COLETANDO DADOS...")
-        from coleta_sptrans import main as coleta_main
-        coleta_main()
+        import coleta_sptrans
+        coleta_sptrans.main()
         
-        # Executar ML
+        
         print("\n2️⃣  TREINANDO MODELO DE IA...")
-        from ml_simples import main as ml_main
-        ml_main()
+        import ml_simples
+        ml_simples.main()
         
-        # Executar dashboard
+        
         print("\n3️⃣  INICIANDO DASHBOARD INTERATIVO...")
         print("🌐 Abrindo navegador em: http://127.0.0.1:8050")
         print("⏳ Aguarde alguns segundos...")
         
-        # Abrir navegador
+        
         webbrowser.open("http://127.0.0.1:8050")
         
         # Importar e executar dashboard

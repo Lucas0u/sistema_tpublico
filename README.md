@@ -35,7 +35,7 @@ source .venv/bin/activate
 pip install -r requirements.txt
 
 # OU instalar manualmente
-pip install pandas matplotlib scikit-learn dash plotly requests joblib numpy flask
+pip install pandas matplotlib scikit-learn dash plotly requests joblib numpy flask statsmodels dash
 
 # Executar
 python src/main.py

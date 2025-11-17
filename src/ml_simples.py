@@ -65,6 +65,35 @@ def main():
             'tem_evento_relevante',
             'periodo_pico_codigo',
         ]
+        
+        # Adicionar features climáticas se disponíveis
+        features_climaticas = [
+            'temperatura',
+            'umidade',
+            'precipitacao',
+            'tem_chuva',
+            'temperatura_categoria_codigo',
+            'umidade_alta',
+        ]
+        
+        for feat in features_climaticas:
+            if feat in df.columns:
+                features.append(feat)
+            else:
+                # Criar valores padrão se não existir
+                if feat == 'temperatura':
+                    df['temperatura'] = 22.0  # Temperatura média SP
+                elif feat == 'umidade':
+                    df['umidade'] = 65.0  # Umidade média SP
+                elif feat == 'precipitacao':
+                    df['precipitacao'] = 0.0
+                elif feat == 'tem_chuva':
+                    df['tem_chuva'] = 0
+                elif feat == 'temperatura_categoria_codigo':
+                    df['temperatura_categoria_codigo'] = 2  # Moderado
+                elif feat == 'umidade_alta':
+                    df['umidade_alta'] = 0
+                features.append(feat)
         X = df[features]
         y = df['lotacao']
         

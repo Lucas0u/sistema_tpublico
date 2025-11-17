@@ -11,7 +11,7 @@ __pycache__/
 .Python
 
 # Arquivos de dados (opcional - pode remover se quiser compartilhar)
-dados/
+# dados/
 *.pkl
 *.csv
 

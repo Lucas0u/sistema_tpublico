@@ -5,6 +5,7 @@ from datetime import datetime, timedelta
 import os
 
 from contexto_planejamento import ContextoPlanejamento
+from clima_openmeteo import ClimaOpenMeteo
 
 def autenticar_sptrans(token):
     """Tenta autenticar na API da SPTrans"""
@@ -110,6 +111,65 @@ def adicionar_contexto_planejamento(df: pd.DataFrame) -> pd.DataFrame:
 
     return df
 
+
+def adicionar_dados_climaticos(df: pd.DataFrame) -> pd.DataFrame:
+    """Enriquece o DataFrame com dados climáticos de São Paulo"""
+    if 'timestamp' not in df.columns:
+        return df
+    
+    df = df.copy()
+    df['timestamp'] = pd.to_datetime(df['timestamp'])
+    clima = ClimaOpenMeteo.obter()
+    
+    # Obter clima atual uma vez (cache interno)
+    clima_atual = clima.obter_clima_atual()
+    
+    # Para cada registro, tentar obter clima específico ou usar atual
+    def obter_clima_para_registro(timestamp):
+        try:
+            dados = clima.obter_clima_para_timestamp(timestamp.to_pydatetime())
+            if dados:
+                return dados
+        except:
+            pass
+        # Fallback para clima atual ou valores padrão
+        if clima_atual:
+            return clima_atual
+        # Valores padrão se API falhar completamente
+        return {
+            'temperatura': 22.0,
+            'umidade': 65.0,
+            'precipitacao': 0.0,
+            'velocidade_vento': 10.0,
+            'codigo_clima': 0
+        }
+    
+    dados_climaticos = df['timestamp'].apply(obter_clima_para_registro)
+    
+    # Extrair campos climáticos
+    df['temperatura'] = dados_climaticos.apply(lambda d: d.get('temperatura') if d else None)
+    df['umidade'] = dados_climaticos.apply(lambda d: d.get('umidade') if d else None)
+    df['precipitacao'] = dados_climaticos.apply(lambda d: d.get('precipitacao', 0) if d else 0)
+    df['velocidade_vento'] = dados_climaticos.apply(lambda d: d.get('velocidade_vento') if d else None)
+    df['codigo_clima'] = dados_climaticos.apply(lambda d: d.get('codigo_clima') if d else None)
+    
+    # Features derivadas para ML
+    # Chuva (binário)
+    df['tem_chuva'] = (df['precipitacao'] > 0).astype(int)
+    
+    # Categorias de temperatura
+    df['temperatura_categoria'] = pd.cut(
+        df['temperatura'],
+        bins=[-np.inf, 15, 20, 25, 30, np.inf],
+        labels=['frio', 'ameno', 'moderado', 'quente', 'muito_quente']
+    )
+    df['temperatura_categoria_codigo'] = df['temperatura_categoria'].cat.codes.fillna(2)
+    
+    # Umidade alta (binário)
+    df['umidade_alta'] = (df['umidade'] > 70).astype(int)
+    
+    return df
+
 def main():
     """Função principal"""
     token = "2a80206e20b1d3be63305d9e703cf2bcc761384f8826975b4c6b55deb70425e9"
@@ -127,6 +187,11 @@ def main():
         print("📊 Dados reais coletados da SPTrans")
     
     df = adicionar_contexto_planejamento(df)
+    
+    # Adicionar dados climáticos
+    print("🌤️ Coletando dados climáticos...")
+    df = adicionar_dados_climaticos(df)
+    print("✅ Dados climáticos adicionados")
     
     # Garantir que a pasta dados existe
     os.makedirs('dados', exist_ok=True)

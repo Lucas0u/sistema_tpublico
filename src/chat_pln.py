@@ -2,6 +2,7 @@ import joblib
 import pandas as pd
 from datetime import datetime
 import os
+from pln_processor import ProcessadorPLN
 
 def carregar_modelo():
     """Carrega o modelo de ML treinado"""
@@ -15,7 +16,19 @@ def carregar_modelo():
         return None, None
 
 def responder_pergunta(pergunta, modelo=None, features=None):
-    """Responde perguntas sobre transporte usando IA"""
+    """Responde perguntas sobre transporte usando IA e PLN"""
+    
+    # Analisar com PLN
+    processador = ProcessadorPLN()
+    analise_pln = processador.processar(pergunta)
+    
+    # Verificar se há problemas críticos
+    if analise_pln['problemas']['requer_acao_urgente']:
+        print("\n⚠️ ALERTA PLN: Problema crítico detectado!")
+        print(f"Severidade: {analise_pln['problemas']['severidade_maxima']}")
+        for p in analise_pln['problemas']['problemas_encontrados']:
+            print(f"  • {p['descricao']}")
+    
     pergunta = pergunta.lower()
     
     if 'lotação' in pergunta or 'cheio' in pergunta or 'vazio' in pergunta:
@@ -42,8 +55,18 @@ def responder_pergunta(pergunta, modelo=None, features=None):
             else:
                 status = "🔵 OK"
                 cor = "green"
-                
-            return f"📊 Previsão de lotação atual: {previsao:.0f}% ({status})"
+            
+            resposta = f"📊 Previsão de lotação atual: {previsao:.0f}% ({status})\n"
+            
+            # Adicionar entidades se encontradas
+            if analise_pln['entidades']['linhas']:
+                resposta += f"🚌 Linha: {analise_pln['entidades']['linhas'][0][0]}\n"
+            
+            resposta += f"\n🔍 **Análise PLN:**\n"
+            resposta += f"  • Temática: {analise_pln['classificacao']['tematica']}\n"
+            resposta += f"  • Confiança: {analise_pln['classificacao']['confianca']*100:.0f}%"
+            
+            return resposta
         else:
             return "🔧 Sistema de previsão em manutenção. Tente novamente em alguns minutos."
     
@@ -51,7 +74,10 @@ def responder_pergunta(pergunta, modelo=None, features=None):
         return "⏱️ Tempo médio de espera: **12-15 minutos** (baseado em dados históricos)"
     
     elif 'rota' in pergunta or 'melhor' in pergunta or 'como chegar' in pergunta:
-        return "🗺️ **Melhor rota sugerida:** Linha 175T-10\n📍 Tempo estimado: 25 minutos\n🚏 8 paradas até o destino"
+        resposta = "🗺️ **Melhor rota sugerida:** Linha 175T-10\n📍 Tempo estimado: 25 minutos\n🚏 8 paradas até o destino\n\n"
+        if analise_pln['entidades']['locais']:
+            resposta += f"📍 Destino detectado: {analise_pln['entidades']['locais'][0]}"
+        return resposta
     
     elif 'linha' in pergunta or 'ônibus' in pergunta or 'qual ônibus' in pergunta:
         return "🚌 **Linhas disponíveis no seu trajeto:**\n• 175T-10 (a cada 15min)\n• 701U-10 (a cada 20min)\n• 702U-10 (a cada 25min)\n• 877T-10 (a cada 30min)"
@@ -66,7 +92,12 @@ def responder_pergunta(pergunta, modelo=None, features=None):
         return "🕐 **Horários de pico:**\n• Manhã: 7h-9h (85% lotação)\n• Tarde: 17h-19h (80% lotação)\n• Fora do pico: 50-65% lotação"
     
     else:
-        return "❓ Não entendi sua pergunta. Tente perguntar sobre:\n• 'Qual a lotação do ônibus?'\n• 'Qual o tempo de espera?'\n• 'Qual a melhor rota?'\n• 'Quais linhas disponíveis?'"
+        # Tentar responder baseado na análise PLN
+        tematica = analise_pln['classificacao']['tematica']
+        if tematica != 'ajuda':
+            return f"❓ Pergunta sobre {tematica}. Analisando com PLN...\n{analise_pln['analise_completa']}"
+        else:
+            return "❓ Não entendi sua pergunta. Tente perguntar sobre:\n• 'Qual a lotação do ônibus?'\n• 'Qual o tempo de espera?'\n• 'Qual a melhor rota?'\n• 'Quais linhas disponíveis?'"
 
 def main():
     """Função principal para testar o chat"""

@@ -2,6 +2,7 @@ import re
 import spacy
 from datetime import datetime
 import pandas as pd
+from pln_processor import ProcessadorPLN
 
 # Carregar modelo de português do spaCy
 try:
@@ -11,12 +12,15 @@ except:
     nlp = None
 
 class ChatbotNLP:
-    """Chatbot com NLP para sistema de transporte"""
+    """Chatbot com NLP avançado para sistema de transporte"""
     
     def __init__(self, modelo_ml=None, features=None, df_onibus=None):
         self.modelo_ml = modelo_ml
         self.features = features
         self.df_onibus = df_onibus
+        
+        # Integrar processador PLN
+        self.processador_pln = ProcessadorPLN()
         
         # Padrões de intenções
         self.intencoes = {
@@ -59,6 +63,12 @@ class ChatbotNLP:
                     entidades['locais'].append(ent.text)
         
         return entidades
+    
+    def obter_analise_pln_detalhada(self, pergunta):
+        """
+        Retorna análise PLN completa com classificação e entidades
+        """
+        return self.processador_pln.processar(pergunta)
     
     def classificar_intencao(self, texto):
         """Classifica a intenção do usuário"""

@@ -10,6 +10,9 @@ spacy==3.7.2
 requests==2.31.0
 python-dateutil==2.8.2
 
+# Processamento de Linguagem Natural (PLN)
+nltk==3.8.1
+
 # Após instalar, execute: python -m spacy download pt_core_news_sm
 
-# pip install dash plotly pandas numpy scikit-learn joblib statsmodels spacy requests python-dateutil
+# pip install dash plotly pandas numpy scikit-learn joblib statsmodels spacy requests python-dateutil nltk

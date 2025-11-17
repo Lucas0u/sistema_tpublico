@@ -6,6 +6,7 @@ import numpy as np
 import os
 import joblib
 from datetime import datetime, timedelta
+from contexto_planejamento import obter_resumo_contexto
 
 # Importar módulo NLP
 try:
@@ -160,6 +161,20 @@ app.layout = html.Div([
             html.P("Lotação Prevista", style={'margin': '0', 'fontSize': '14px'})
         ], className='stat-card'),
     ], className='stats'),
+
+    html.Div([
+        html.H3("Contexto urbano oficial", style={'marginBottom': '10px', 'color': '#2E86AB'}),
+        html.Div(
+            id='contexto-planejamento',
+            style={
+                'border': '1px solid #ddd',
+                'borderRadius': '10px',
+                'padding': '15px',
+                'backgroundColor': '#f8f9fa',
+                'lineHeight': '1.6'
+            }
+        )
+    ], style={'marginBottom': '30px'}),
     
     # Linha 1: Mapa + Previsão de Lotação
     html.Div([
@@ -440,6 +455,39 @@ def atualizar_lotacao_atual(n):
     hora_atual = datetime.now().hour
     lotacao = calcular_lotacao_prevista(hora_atual)
     return f"{lotacao:.0f}%"
+
+
+@callback(
+    Output('contexto-planejamento', 'children'),
+    Input('interval-update', 'n_intervals')
+)
+def atualizar_contexto_planejamento(n):
+    resumo = obter_resumo_contexto()
+    linhas = []
+
+    if resumo.get('feriado'):
+        feriado = resumo['feriado']
+        linhas.append(f"Hoje é **{feriado['nome']}** ({feriado['tipo']}).")
+
+    if resumo.get('rodizio_ativo'):
+        linhas.append("Rodízio veicular **ativo** no horário atual.")
+    else:
+        linhas.append("Rodízio inativo neste momento.")
+
+    if resumo.get('periodo_pico'):
+        descricao = resumo.get('descricao_pico') or ""
+        linhas.append(f"Período de pico: **{resumo['periodo_pico']}**. {descricao}")
+    else:
+        linhas.append("Fora dos períodos oficiais de pico.")
+
+    if resumo.get('eventos'):
+        eventos = ', '.join(resumo['eventos'])
+        linhas.append(f"Eventos em destaque: {eventos}.")
+    else:
+        linhas.append("Sem grandes eventos cadastrados para hoje.")
+
+    markdown = "\n".join([f"- {linha}" for linha in linhas])
+    return dcc.Markdown(markdown, dangerously_allow_html=True, style={'margin': 0})
 
 @callback(
     Output('resultado-rotas', 'children'),

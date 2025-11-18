@@ -9,16 +9,23 @@ from clima_openmeteo import ClimaOpenMeteo
 
 def autenticar_sptrans(token):
     """Tenta autenticar na API da SPTrans"""
-    url = "http://api.olhovivo.sptrans.com.br/v2.1/Login/Autenticar"
+    url = f"http://api.olhovivo.sptrans.com.br/v2.1/Login/Autenticar?token={token}"
     
     session = requests.Session()
-    response = session.post(url, data={"token": token})
-    
-    if response.status_code == 200:
-        print("✅ Autenticado com sucesso na SPTrans!")
-        return session
-    else:
-        print(f"❌ Falha na autenticação: {response.status_code}")
+    try:
+        response = session.post(url)
+        
+        if response.status_code == 200 and response.text == 'true':
+            print("✅ Autenticado com sucesso na SPTrans!")
+            return session
+        else:
+            print(f"❌ Falha na autenticação: Status {response.status_code}")
+            if response.status_code == 404:
+                print("   💡 Token inválido ou expirado. Solicite novo token em:")
+                print("   🔗 https://www.sptrans.com.br/desenvolvedores/")
+            return None
+    except Exception as e:
+        print(f"❌ Erro na autenticação: {e}")
         return None
 
 def buscar_dados_reais(token):
@@ -32,10 +39,22 @@ def buscar_dados_reais(token):
             
             if response.status_code == 200:
                 dados = response.json()
-                linhas = []
                 
-                for linha in dados.get('l', []):
-                    for veiculo in linha.get('vs', []):
+                if not dados or not isinstance(dados, dict):
+                    print("   ⚠️ API retornou resposta vazia")
+                    return None
+                
+                linhas_api = dados.get('l', [])
+                print(f"   📊 Linhas encontradas na API: {len(linhas_api)}")
+                
+                linhas = []
+                for linha in linhas_api:
+                    if not linha:
+                        continue
+                    veiculos = linha.get('vs', [])
+                    for veiculo in veiculos:
+                        if not veiculo:
+                            continue
                         linhas.append({
                             'linha': linha.get('c', ''),
                             'velocidade': veiculo.get('v', 0),
@@ -44,8 +63,16 @@ def buscar_dados_reais(token):
                             'timestamp': datetime.now()
                         })
                 
+                if len(linhas) == 0:
+                    print("   ⚠️ API não retornou nenhum veículo ativo")
+                    print("   💡 Usando dados de exemplo em seu lugar")
+                    return None
+                
                 df = pd.DataFrame(linhas)
+                print(f"   ✅ {len(df)} veículos coletados da API")
                 return df
+            else:
+                print(f"   ⚠️ Status code: {response.status_code}")
                 
         except Exception as e:
             print(f"❌ Erro na coleta real: {e}")
@@ -119,53 +146,50 @@ def adicionar_dados_climaticos(df: pd.DataFrame) -> pd.DataFrame:
     
     df = df.copy()
     df['timestamp'] = pd.to_datetime(df['timestamp'])
+    
+    print("   📡 Buscando dados climáticos...")
     clima = ClimaOpenMeteo.obter()
     
-    # Obter clima atual uma vez (cache interno)
+    # Obter clima atual uma vez
     clima_atual = clima.obter_clima_atual()
     
-    # Para cada registro, tentar obter clima específico ou usar atual
-    def obter_clima_para_registro(timestamp):
-        try:
-            dados = clima.obter_clima_para_timestamp(timestamp.to_pydatetime())
-            if dados:
-                return dados
-        except:
-            pass
-        # Fallback para clima atual ou valores padrão
-        if clima_atual:
-            return clima_atual
-        # Valores padrão se API falhar completamente
-        return {
+    # Valores padrão se API falhar
+    if not clima_atual:
+        clima_atual = {
             'temperatura': 22.0,
             'umidade': 65.0,
             'precipitacao': 0.0,
             'velocidade_vento': 10.0,
             'codigo_clima': 0
         }
+        print("   ⚠️ Usando valores padrão de clima")
+    else:
+        print(f"   ✅ Clima: {clima_atual.get('temperatura')}°C")
     
-    dados_climaticos = df['timestamp'].apply(obter_clima_para_registro)
+    # Aplicar dados climáticos
+    df['temperatura'] = clima_atual.get('temperatura', 22.0)
+    df['umidade'] = clima_atual.get('umidade', 65.0)
+    df['precipitacao'] = clima_atual.get('precipitacao', 0.0)
+    df['velocidade_vento'] = clima_atual.get('velocidade_vento', 10.0)
+    df['codigo_clima'] = clima_atual.get('codigo_clima', 0)
     
-    # Extrair campos climáticos
-    df['temperatura'] = dados_climaticos.apply(lambda d: d.get('temperatura') if d else None)
-    df['umidade'] = dados_climaticos.apply(lambda d: d.get('umidade') if d else None)
-    df['precipitacao'] = dados_climaticos.apply(lambda d: d.get('precipitacao', 0) if d else 0)
-    df['velocidade_vento'] = dados_climaticos.apply(lambda d: d.get('velocidade_vento') if d else None)
-    df['codigo_clima'] = dados_climaticos.apply(lambda d: d.get('codigo_clima') if d else None)
-    
-    # Features derivadas para ML
-    # Chuva (binário)
+    # Features derivadas
     df['tem_chuva'] = (df['precipitacao'] > 0).astype(int)
     
-    # Categorias de temperatura
-    df['temperatura_categoria'] = pd.cut(
-        df['temperatura'],
-        bins=[-np.inf, 15, 20, 25, 30, np.inf],
-        labels=['frio', 'ameno', 'moderado', 'quente', 'muito_quente']
-    )
-    df['temperatura_categoria_codigo'] = df['temperatura_categoria'].cat.codes.fillna(2)
+    # Categoria de temperatura
+    temp = clima_atual.get('temperatura', 22.0)
+    if temp < 15:
+        codigo = 0
+    elif temp < 20:
+        codigo = 1
+    elif temp < 25:
+        codigo = 2
+    elif temp < 30:
+        codigo = 3
+    else:
+        codigo = 4
+    df['temperatura_categoria_codigo'] = codigo
     
-    # Umidade alta (binário)
     df['umidade_alta'] = (df['umidade'] > 70).astype(int)
     
     return df
@@ -179,12 +203,12 @@ def main():
     # Tentar dados reais primeiro
     df = buscar_dados_reais(token)
     
-    # Se falhar, usar dados de exemplo
+    # Se falhar ou retornar poucos dados, usar dados de exemplo
     if df is None or len(df) == 0:
         df = criar_dados_exemplo()
         print("📊 Dados de exemplo criados")
     else:
-        print("📊 Dados reais coletados da SPTrans")
+        print(f"📊 Dados reais coletados da SPTrans: {len(df)} veículos")
     
     df = adicionar_contexto_planejamento(df)
     
@@ -196,9 +220,17 @@ def main():
     # Garantir que a pasta dados existe
     os.makedirs('dados', exist_ok=True)
     
+    # Diagnóstico
+    print(f"\n📊 Diagnóstico dos dados:")
+    print(f"   Total de registros: {len(df)}")
+    print(f"   Colunas: {list(df.columns)}")
+    print(f"   Primeiras linhas de lat/lon:")
+    if 'lat' in df.columns and 'lon' in df.columns:
+        print(df[['linha', 'lat', 'lon', 'velocidade']].head())
+    
     # Salvar dados
     df.to_csv('dados/dados_onibus.csv', index=False)
-    print(f"💾 Dados salvos: {len(df)} registros")
+    print(f"\n💾 Dados salvos: {len(df)} registros")
     print(f"📋 Linhas: {', '.join(df['linha'].unique())}")
 
 if __name__ == "__main__":

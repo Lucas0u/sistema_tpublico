@@ -24,6 +24,27 @@ def main():
         df['hora'] = df['timestamp'].dt.hour
         df['dia_semana'] = df['timestamp'].dt.dayofweek
         df['fim_de_semana'] = (df['dia_semana'] >= 5).astype(int)
+
+        # Garantir colunas adicionais do contexto
+        contexto_defaults = {
+            'em_periodo_pico': 0,
+            'rodizio_ativo': 0,
+            'tem_evento_relevante': 0,
+        }
+        for coluna, default in contexto_defaults.items():
+            if coluna not in df.columns:
+                df[coluna] = default
+
+        if 'feriado_nome' in df.columns:
+            df['feriado_flag'] = df['feriado_nome'].notna().astype(int)
+        else:
+            df['feriado_flag'] = 0
+
+        mapa_periodos = {'morning': 1, 'midday': 2, 'afternoon': 3}
+        if 'periodo_pico' in df.columns:
+            df['periodo_pico_codigo'] = df['periodo_pico'].map(mapa_periodos).fillna(0)
+        else:
+            df['periodo_pico_codigo'] = 0
         
         # Simular lotação
         np.random.seed(42)
@@ -33,7 +54,46 @@ def main():
         df['lotacao'] = df['lotacao'].clip(0, 100)
         
         # Features para ML
-        features = ['hora', 'dia_semana', 'velocidade']
+        features = [
+            'hora',
+            'dia_semana',
+            'velocidade',
+            'fim_de_semana',
+            'em_periodo_pico',
+            'rodizio_ativo',
+            'feriado_flag',
+            'tem_evento_relevante',
+            'periodo_pico_codigo',
+        ]
+        
+        # Adicionar features climáticas se disponíveis
+        features_climaticas = [
+            'temperatura',
+            'umidade',
+            'precipitacao',
+            'tem_chuva',
+            'temperatura_categoria_codigo',
+            'umidade_alta',
+        ]
+        
+        for feat in features_climaticas:
+            if feat in df.columns:
+                features.append(feat)
+            else:
+                # Criar valores padrão se não existir
+                if feat == 'temperatura':
+                    df['temperatura'] = 22.0  # Temperatura média SP
+                elif feat == 'umidade':
+                    df['umidade'] = 65.0  # Umidade média SP
+                elif feat == 'precipitacao':
+                    df['precipitacao'] = 0.0
+                elif feat == 'tem_chuva':
+                    df['tem_chuva'] = 0
+                elif feat == 'temperatura_categoria_codigo':
+                    df['temperatura_categoria_codigo'] = 2  # Moderado
+                elif feat == 'umidade_alta':
+                    df['umidade_alta'] = 0
+                features.append(feat)
         X = df[features]
         y = df['lotacao']
         

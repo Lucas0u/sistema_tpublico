@@ -3,6 +3,7 @@ import spacy
 from datetime import datetime
 import pandas as pd
 from pln_processor import ProcessadorPLN
+from contexto_planejamento import obter_resumo_contexto
 
 # Carregar modelo de português do spaCy
 try:
@@ -116,6 +117,8 @@ class ChatbotNLP:
         intencao = self.classificar_intencao(pergunta)
         
         # Gerar resposta baseada na intenção
+        resposta = ""
+
         if intencao == 'lotacao':
             previsao = self.prever_lotacao()
             if previsao:
@@ -134,9 +137,8 @@ class ChatbotNLP:
                     resposta += f"🚌 Para a linha {entidades['linhas'][0]}\n"
                 
                 resposta += "\n💡 **Dica:** Evite horários de pico (7h-9h e 17h-19h)"
-                return resposta
             else:
-                return "🔧 Sistema de previsão temporariamente indisponível."
+                resposta = "🔧 Sistema de previsão temporariamente indisponível."
         
         elif intencao == 'tempo_espera':
             if entidades['linhas']:
@@ -149,16 +151,16 @@ class ChatbotNLP:
                     '501U-10': '15-18'
                 }
                 tempo = tempos.get(linha, '12-20')
-                return f"⏱️ **Tempo de espera para linha {linha}:** {tempo} minutos\n📍 Baseado em dados históricos"
+                resposta = f"⏱️ **Tempo de espera para linha {linha}:** {tempo} minutos\n📍 Baseado em dados históricos"
             else:
-                return "⏱️ **Tempo médio de espera:** 12-20 minutos\n📊 Varia por linha e horário"
+                resposta = "⏱️ **Tempo médio de espera:** 12-20 minutos\n📊 Varia por linha e horário"
         
         elif intencao == 'rota':
             if entidades['locais']:
                 destino = entidades['locais'][0]
-                return f"🗺️ **Melhor rota para {destino}:**\n🚌 Linha recomendada: 175T-10\n⏱️ Tempo estimado: 25-30 minutos\n🚏 8 paradas\n\n💡 Alternativa: Linha 701U-10 (30-35 min)"
+                resposta = f"🗺️ **Melhor rota para {destino}:**\n🚌 Linha recomendada: 175T-10\n⏱️ Tempo estimado: 25-30 minutos\n🚏 8 paradas\n\n💡 Alternativa: Linha 701U-10 (30-35 min)"
             else:
-                return "🗺️ **Para sugerir melhor rota, informe:**\n📍 Seu destino\n🕐 Horário desejado\n\nExemplo: 'Melhor rota para Avenida Paulista às 14h'"
+                resposta = "🗺️ **Para sugerir melhor rota, informe:**\n📍 Seu destino\n🕐 Horário desejado\n\nExemplo: 'Melhor rota para Avenida Paulista às 14h'"
         
         elif intencao == 'linha':
             resposta = "🚌 **Linhas disponíveis:**\n\n"
@@ -175,7 +177,6 @@ class ChatbotNLP:
                 resposta += f"🕐 Para o horário {horario}:\n"
             
             resposta += "\n".join(linhas_info)
-            return resposta
         
         elif intencao == 'velocidade':
             if self.df_onibus is not None and len(self.df_onibus) > 0:
@@ -183,12 +184,12 @@ class ChatbotNLP:
                 vel_max = self.df_onibus['velocidade'].max()
                 vel_min = self.df_onibus['velocidade'].min()
                 
-                return f"🚀 **Análise de velocidade:**\n📊 Média atual: {vel_media:.1f} km/h\n📈 Máxima: {vel_max:.0f} km/h\n📉 Mínima: {vel_min:.0f} km/h\n\n💡 Velocidade esperada: 30 km/h"
+                resposta = f"🚀 **Análise de velocidade:**\n📊 Média atual: {vel_media:.1f} km/h\n📈 Máxima: {vel_max:.0f} km/h\n📉 Mínima: {vel_min:.0f} km/h\n\n💡 Velocidade esperada: 30 km/h"
             else:
-                return "🚀 **Velocidade média:** 25-30 km/h\n📊 Dados em tempo real indisponíveis"
+                resposta = "🚀 **Velocidade média:** 25-30 km/h\n📊 Dados em tempo real indisponíveis"
         
         elif intencao == 'horario_pico':
-            return "🕐 **Horários de pico:**\n\n⏰ **Manhã:** 7h-9h\n├─ Lotação média: 85%\n└─ Tempo de espera: +40%\n\n⏰ **Tarde:** 17h-19h\n├─ Lotação média: 80%\n└─ Tempo de espera: +35%\n\n✅ **Melhor horário:** 10h-16h ou após 20h"
+            resposta = "🕐 **Horários de pico:**\n\n⏰ **Manhã:** 7h-9h\n├─ Lotação média: 85%\n└─ Tempo de espera: +40%\n\n⏰ **Tarde:** 17h-19h\n├─ Lotação média: 80%\n└─ Tempo de espera: +35%\n\n✅ **Melhor horário:** 10h-16h ou após 20h"
         
         elif intencao == 'previsao':
             horas = list(range(6, 23))
@@ -199,11 +200,39 @@ class ChatbotNLP:
                 if prev:
                     emoji = "⛔" if prev > 85 else "🟡" if prev > 70 else "🟢" if prev > 50 else "🔵"
                     resposta += f"{emoji} {h:02d}h: {prev:.0f}%\n"
-            
-            return resposta
-        
         else:  # ajuda
-            return "🤖 **Assistente Virtual de Transporte**\n\n**Posso ajudar com:**\n\n📊 Previsão de lotação\n⏱️ Tempo de espera\n🗺️ Melhores rotas\n🚌 Linhas disponíveis\n🚀 Velocidades médias\n🕐 Horários de pico\n\n**Exemplos:**\n• 'Qual lotação da linha 175T-10?'\n• 'Melhor rota para Paulista às 14h'\n• 'Tempo de espera agora'"
+            resposta = "🤖 **Assistente Virtual de Transporte**\n\n**Posso ajudar com:**\n\n📊 Previsão de lotação\n⏱️ Tempo de espera\n🗺️ Melhores rotas\n🚌 Linhas disponíveis\n🚀 Velocidades médias\n🕐 Horários de pico\n\n**Exemplos:**\n• 'Qual lotação da linha 175T-10?'\n• 'Melhor rota para Paulista às 14h'\n• 'Tempo de espera agora'"
+        
+        complemento = self._gerar_contexto_urbano()
+        if complemento:
+            resposta += f"\n\n{complemento}"
+
+        return resposta
+
+    def _gerar_contexto_urbano(self) -> str:
+        """Gera texto complementar com base no planejamento oficial."""
+        resumo = obter_resumo_contexto()
+        linhas = []
+
+        if resumo.get('feriado'):
+            feriado = resumo['feriado']
+            linhas.append(f"🎉 Hoje é {feriado['nome']} ({feriado['tipo']}).")
+
+        if resumo.get('rodizio_ativo'):
+            linhas.append("🚗 Rodízio veicular ativo neste horário (CET).")
+
+        if resumo.get('periodo_pico'):
+            descricao = resumo.get('descricao_pico') or ''
+            linhas.append(f"⏰ Período de pico **{resumo['periodo_pico']}**. {descricao}")
+
+        if resumo.get('eventos'):
+            eventos = ', '.join(resumo['eventos'])
+            linhas.append(f"🎭 Eventos em destaque: {eventos}.")
+
+        if not linhas:
+            return ""
+
+        return "📌 **Contexto urbano de hoje:**\n" + "\n".join(linhas)
 
 def testar_nlp():
     """Testa o módulo NLP"""

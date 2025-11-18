@@ -5,6 +5,8 @@ from sklearn.ensemble import RandomForestRegressor
 from sklearn.metrics import mean_squared_error, mean_absolute_error
 from statsmodels.tsa.arima.model import ARIMA
 import warnings
+from contexto_planejamento import ContextoPlanejamento
+
 warnings.filterwarnings('ignore')
 
 def criar_dados_demanda():
@@ -74,8 +76,32 @@ def main():
     print(f"📊 Dados criados: {len(df)} registros")
     print(f"📅 Período: {df['timestamp'].min()} até {df['timestamp'].max()}")
     
+    contexto = ContextoPlanejamento.obter()
+    df['contexto_periodo'] = df['timestamp'].apply(
+        lambda ts: contexto.periodo_pico(ts) or {}
+    )
+    df['em_periodo_pico'] = df['contexto_periodo'].apply(lambda ctx: 1 if ctx else 0)
+    mapa_periodos = {'morning': 1, 'midday': 2, 'afternoon': 3}
+    df['periodo_pico_codigo'] = df['contexto_periodo'].apply(
+        lambda ctx: mapa_periodos.get(ctx.get('period'), 0) if ctx else 0
+    )
+    df['rodizio_ativo'] = df['timestamp'].apply(lambda ts: int(contexto.rodizio_ativo(ts)))
+    df['feriado_flag'] = df['timestamp'].apply(lambda ts: 1 if contexto.feriado_no_dia(ts) else 0)
+    df['tem_evento_relevante'] = df['timestamp'].apply(lambda ts: int(bool(contexto.eventos_do_dia(ts))))
+    df = df.drop(columns=['contexto_periodo'])
+
     # Features para Random Forest
-    features_rf = ['hora', 'dia_semana', 'fim_de_semana', 'velocidade_media']
+    features_rf = [
+        'hora',
+        'dia_semana',
+        'fim_de_semana',
+        'velocidade_media',
+        'em_periodo_pico',
+        'periodo_pico_codigo',
+        'rodizio_ativo',
+        'feriado_flag',
+        'tem_evento_relevante',
+    ]
     
     # Preparar dados por linha para ARIMA
     linhas = df['linha'].unique()

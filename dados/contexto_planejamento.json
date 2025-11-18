@@ -1,0 +1,146 @@
+{
+    "data_sources": {
+      "peak_hours": "Pesquisa Origem-Destino do Metrô de São Paulo / Imprensa",
+      "traffic_restriction": "CET / SPTrans",
+      "holidays": [
+        "Prefeitura de São Paulo – Decreto 64.005/2025",
+        "Feriados.inf.br – calendário oficial"
+      ],
+      "events": [
+        "Prefeitura de São Paulo – Secretaria da Cultura",
+        "Fundação Bienal de São Paulo",
+        "Câmara Brasileira do Livro (CBL)",
+        "CASACOR São Paulo – site oficial"
+      ]
+    },
+    "peak_hours": {
+      "periods": [
+        {
+          "period": "manhã",
+          "start": "05:00",
+          "end": "08:00",
+          "average_daily_trips_millions": 4.5,
+          "description": "Pico da manhã, com grande fluxo para trabalho e estudo."
+        },
+        {
+          "period": "meio dia",
+          "start": "12:00",
+          "end": "14:30",
+          "average_daily_trips_millions": 4.0,
+          "description": "Pico do horário de almoço, menor que o da manhã."
+        },
+        {
+          "period": "tarde",
+          "start": "16:00",
+          "end": "19:00",
+          "average_daily_trips_millions": 4.0,
+          "description": "Pico de final de tarde, com retorno do trabalho e escolas."
+        }
+      ]
+    },
+    "traffic_restriction": {
+      "type": "rodizio_veicular",
+      "description": "Restrição de circulação de veículos no Centro Expandido de São Paulo.",
+      "restricted_times": [
+        { "start": "07:00", "end": "10:00" },
+        { "start": "17:00", "end": "20:00" }
+      ],
+      "days": ["Segunda", "Terça", "Quarta", "Quinta", "Sexta"],
+      "note": "Regra oficial da CET."
+    },
+    "holidays": {
+      "official": [
+        { "date": "2025-01-01", "name": "Confraternização Universal", "type": "nacional" },
+        { "date": "2025-01-25", "name": "Aniversário da Cidade de São Paulo", "type": "municipal" },
+        { "date": "2025-04-18", "name": "Paixão de Cristo", "type": "nacional / religioso" },
+        { "date": "2025-04-21", "name": "Tiradentes", "type": "nacional" },
+        { "date": "2025-05-01", "name": "Dia do Trabalho", "type": "nacional" },
+        { "date": "2025-06-19", "name": "Corpus Christi", "type": "municipal / religioso" },
+        { "date": "2025-07-09", "name": "Revolução Constitucionalista de 1932", "type": "estadual" },
+        { "date": "2025-09-07", "name": "Independência do Brasil", "type": "nacional" },
+        { "date": "2025-10-12", "name": "Nossa Senhora Aparecida", "type": "nacional / religioso" },
+        { "date": "2025-11-02", "name": "Finados", "type": "nacional / religioso" },
+        { "date": "2025-11-15", "name": "Proclamação da República", "type": "nacional" },
+        { "date": "2025-11-20", "name": "Dia da Consciência Negra", "type": "municipal / nacional" },
+        { "date": "2025-12-25", "name": "Natal", "type": "nacional" }
+      ],
+      "facultative_and_suspensions": [
+        { "date": "2025-03-03", "name": "Segunda de Carnaval", "type": "ponto facultativo" },
+        { "date": "2025-03-04", "name": "Terça de Carnaval", "type": "ponto facultativo" },
+        { "date": "2025-03-05", "name": "Quarta-feira de Cinzas (até 12h)", "type": "ponto facultativo" },
+        { "date": "2025-10-27", "name": "Dia do Servidor Público", "type": "ponto facultativo" },
+        { "date": "2025-12-24", "name": "Véspera de Natal", "type": "ponto facultativo" },
+        { "date": "2025-12-31", "name": "Véspera de Ano-Novo", "type": "ponto facultativo" },
+        { "date": "2025-05-02", "name": "Suspensão de expediente", "type": "suspensão" },
+        { "date": "2025-06-20", "name": "Suspensão de expediente", "type": "suspensão" },
+        { "date": "2025-11-21", "name": "Suspensão de expediente", "type": "suspensão" }
+      ]
+    },
+    "seasonality": {
+      "patterns": [
+        {
+          "season": "verao",
+          "months": ["Dezembro", "Janeiro", "Fevereiro"],
+          "effects": "Aumento de viagens para o litoral e maior fluxo em feriados de fim de ano."
+        },
+        {
+          "season": "inverno",
+          "months": ["Junho", "Julho", "Agosto"],
+          "effects": "Redução das viagens para o litoral e aumento da participação em eventos culturais."
+        },
+        {
+          "season": "ano_letivo",
+          "effects": "Mais deslocamentos em horários de pico devido a escolas e universidades."
+        }
+      ],
+      "note": "Sazonalidade baseada em observações gerais."
+    },
+    "recurring_events": {
+      "events": [
+        {
+          "name": "Virada Cultural",
+          "type": "cultural / música / arte",
+          "frequency": "anual",
+          "description": "Evento de 24 horas com centenas de apresentações artísticas espalhadas pela cidade.",
+          "expected_attendance_millions": 4.7,
+          "notes": "Edição de 2025 contou com mais de 20 palcos."
+        },
+        {
+          "name": "Feira da Liberdade",
+          "type": "feira / artesanato",
+          "frequency": "semanal",
+          "days": ["Sábado", "Domingo"],
+          "time": "09:00–18:00",
+          "location": "Praça da Liberdade",
+          "description": "Feira tradicional com gastronomia oriental, artesanato e cultura japonesa."
+        },
+        {
+          "name": "Bienal Internacional do Livro",
+          "type": "literatura",
+          "frequency": "bienal",
+          "next_dates": "2026-09-04 a 2026-09-13",
+          "description": "Maior evento literário da América Latina.",
+          "last_attendance": 722000,
+          "last_edition": "2024"
+        },
+        {
+          "name": "Bienal de Arte de São Paulo",
+          "type": "arte / exposição",
+          "frequency": "bienal",
+          "current_edition": "36ª Bienal",
+          "dates": "2025-09-06 a 2026-01-11",
+          "venue": "Parque Ibirapuera",
+          "description": "Uma das maiores exposições de arte contemporânea das Américas."
+        },
+        {
+          "name": "CASACOR São Paulo",
+          "type": "arquitetura / design",
+          "frequency": "anual",
+          "typical_months": ["Maio", "Junho", "Julho"],
+          "latest_dates": "2025-05-27 a 2025-08-03",
+          "location": "Parque da Água Branca",
+          "description": "Mostra de arquitetura e design com centenas de ambientes assinados."
+        }
+      ]
+    }
+  }

@@ -1,0 +1,96 @@
+{
+  "data_sources": {
+    "peak_hours": "Pesquisa Origem-Destino do Metrô de São Paulo (dados divulgados pela imprensa - UOL)",
+    "holidays": [
+      "Prefeitura de São Paulo – Decreto 64.005/2025",
+      "Feriados.inf.br – Calendário 2025 SP",
+      "CLIC São Paulo – Datas oficiais"
+    ],
+    "traffic": "SPTRANS / CET – Rodízio Veicular (regra vigente)"
+  },
+  "peak_hours": {
+    "periods": [
+      {
+        "period": "morning",
+        "start": "05:00",
+        "end": "08:00",
+        "average_daily_trips_millions": 4.5,
+        "description": "Maior pico do dia segundo a pesquisa OD. Concentração de deslocamentos para trabalho e estudo."
+      },
+      {
+        "period": "midday",
+        "start": "12:00",
+        "end": "12:30",
+        "average_daily_trips_millions": 4.0,
+        "description": "Pico moderado no horário do almoço, com redução em relação a anos anteriores."
+      },
+      {
+        "period": "afternoon",
+        "start": "16:00",
+        "end": "19:00",
+        "average_daily_trips_millions": 4.0,
+        "description": "Segundo maior pico diário, concentrado na saída do trabalho e escolas."
+      }
+    ]
+  },
+  "traffic_restriction": {
+    "type": "rodizio_veicular",
+    "description": "Restrição de circulação de veículos no Centro Expandido de São Paulo.",
+    "restricted_times": [
+      { "start": "07:00", "end": "10:00" },
+      { "start": "17:00", "end": "20:00" }
+    ],
+    "days": ["Monday", "Tuesday", "Wednesday", "Thursday", "Friday"],
+    "note": "Regra vigente e amplamente divulgada por CET/SPTRANS."
+  },
+  "holidays": {
+    "list": [
+      { "date": "2025-01-01", "name": "Confraternização Universal", "type": "national" },
+      { "date": "2025-01-25", "name": "Aniversário da Cidade de São Paulo", "type": "municipal" },
+      { "date": "2025-04-18", "name": "Paixão de Cristo", "type": "national / religious" },
+      { "date": "2025-04-21", "name": "Tiradentes", "type": "national" },
+      { "date": "2025-05-01", "name": "Dia do Trabalho", "type": "national" },
+      { "date": "2025-06-19", "name": "Corpus Christi", "type": "municipal / religious" },
+      { "date": "2025-07-09", "name": "Revolução Constitucionalista de 1932", "type": "state" },
+      { "date": "2025-09-07", "name": "Independência do Brasil", "type": "national" },
+      { "date": "2025-10-12", "name": "Nossa Senhora Aparecida", "type": "national / religious" },
+      { "date": "2025-11-02", "name": "Finados", "type": "national / religious" },
+      { "date": "2025-11-15", "name": "Proclamação da República", "type": "national" },
+      { "date": "2025-11-20", "name": "Dia da Consciência Negra", "type": "municipal / national" },
+      { "date": "2025-12-25", "name": "Natal", "type": "national" }
+    ]
+  },
+  "facultative_and_suspensions": {
+    "list": [
+      { "date": "2025-03-03", "name": "Segunda de Carnaval", "type": "ponto facultativo" },
+      { "date": "2025-03-04", "name": "Terça de Carnaval", "type": "ponto facultativo" },
+      { "date": "2025-03-05", "name": "Quarta-feira de Cinzas (até 12h)", "type": "ponto facultativo" },
+      { "date": "2025-10-27", "name": "Dia do Servidor Público", "type": "ponto facultativo" },
+      { "date": "2025-12-24", "name": "Véspera de Natal", "type": "ponto facultativo" },
+      { "date": "2025-12-31", "name": "Véspera de Ano-Novo", "type": "ponto facultativo" },
+      { "date": "2025-05-02", "name": "Suspensão de expediente", "type": "suspensão" },
+      { "date": "2025-06-20", "name": "Suspensão de expediente", "type": "suspensão" },
+      { "date": "2025-11-21", "name": "Suspensão de expediente", "type": "suspensão" }
+    ]
+  },
+  "seasonality": {
+    "patterns": [
+      {
+        "season": "summer",
+        "months": ["December", "January", "February"],
+        "effects": "Aumento de viagens para o litoral e alto fluxo em feriados de fim de ano."
+      },
+      {
+        "season": "winter",
+        "months": ["June", "July", "August"],
+        "effects": "Movimento reduzido para áreas turísticas e aumento de deslocamentos urbanos por clima frio."
+      },
+      {
+        "season": "school_year_peaks",
+        "effects": "Durante o ano letivo há acentuação nos picos da manhã e tarde."
+      }
+    ],
+    "note": "Sazonalidade qualitativa — não há dados públicos mensais estruturados em formato aberto."
+  }
+}
+

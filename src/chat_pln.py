@@ -92,7 +92,7 @@ def responder_pergunta(pergunta, modelo=None, features=None):
         return "🕐 **Horários de pico:**\n• Manhã: 7h-9h (85% lotação)\n• Tarde: 17h-19h (80% lotação)\n• Fora do pico: 50-65% lotação"
     
     else:
-        # Tentar responder baseado na análise PLN
+        
         tematica = analise_pln['classificacao']['tematica']
         if tematica != 'ajuda':
             return f"❓ Pergunta sobre {tematica}. Analisando com PLN...\n{analise_pln['analise_completa']}"
@@ -104,10 +104,10 @@ def main():
     print("💬 CHAT DO SISTEMA DE TRANSPORTE")
     print("=" * 40)
     
-    # Carregar modelo
+    # Carregar o modelo
     modelo, features = carregar_modelo()
     
-    # Testar algumas perguntas
+    
     perguntas_teste = [
         "Qual a lotação do ônibus?",
         "Quanto tempo de espera?",

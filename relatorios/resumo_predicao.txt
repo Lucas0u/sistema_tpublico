@@ -1,0 +1,4 @@
+RESUMO PREDIÇÃO ARIMA+RF
+MAPE: 9.74%-20.64%
+Linhas: 4 otimizadas
+Status: ✅ Pronto para produção

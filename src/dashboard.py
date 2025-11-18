@@ -22,7 +22,8 @@ try:
     df = pd.read_csv('dados/dados_onibus.csv')
     df['timestamp'] = pd.to_datetime(df['timestamp'])
     print("✅ Dados carregados do CSV")
-except:
+except Exception as e:
+    print(f"⚠️ Erro ao carregar CSV: {e}")
     # Dados de exemplo se falhar
     np.random.seed(42)
     df = pd.DataFrame({
@@ -36,8 +37,8 @@ except:
 
 # Carregar modelo ML
 try:
-    modelo = joblib.load('dados/modelo_lotacao.pkl')
-    features = joblib.load('dados/features.pkl')
+    modelo = joblib.load('dados/modelo_final.pkl')
+    features = joblib.load('dados/features_finais.pkl')
     print("✅ Modelo ML carregado")
     ML_DISPONIVEL = True
 except:
@@ -54,7 +55,10 @@ else:
 
 # Funções auxiliares
 def calcular_lotacao_prevista(hora, dia_semana=None):
-    """Calcula previsão de lotação"""
+    """
+    Calcula previsão de lotação baseada em padrões históricos
+    NOTA: API SPTrans não fornece dados de ocupação em tempo real
+    """
     if modelo and features:
         try:
             if dia_semana is None:
@@ -64,15 +68,26 @@ def calcular_lotacao_prevista(hora, dia_semana=None):
         except:
             pass
     
-    # Fallback: simulação baseada em horários
+    # Predição baseada em padrões conhecidos de SP
+    if dia_semana is None:
+        dia_semana = datetime.now().weekday()
+    
+    # Fim de semana tem menos lotação
+    fator_fds = 0.7 if dia_semana >= 5 else 1.0
+    
+    # Horários de pico
     if 7 <= hora <= 9:
-        return 85
+        return int(85 * fator_fds)
     elif 17 <= hora <= 19:
-        return 80
+        return int(80 * fator_fds)
     elif 12 <= hora <= 14:
-        return 65
+        return int(65 * fator_fds)
+    elif 5 <= hora <= 7:
+        return int(60 * fator_fds)
+    elif 20 <= hora <= 22:
+        return int(55 * fator_fds)
     else:
-        return 50
+        return int(40 * fator_fds)
 
 def gerar_previsao_diaria():
     """Gera previsão de lotação para o dia inteiro"""
@@ -380,40 +395,107 @@ def atualizar_previsao_diaria(n):
     Input('interval-update', 'n_intervals')
 )
 def atualizar_velocidade_eficiencia(n):
-    """Análise de velocidade média vs esperada"""
-    velocidade_esperada = 30  # km/h
+    """Análise de velocidade média vs esperada - Top 15 linhas"""
     
-    df_vel = df.groupby('linha')['velocidade'].mean().reset_index()
+    # Calcular velocidade esperada dinâmica baseada no horário
+    hora_atual = datetime.now().hour
+    dia_semana = datetime.now().weekday()
+    
+    # Velocidade esperada varia com horário e dia
+    if dia_semana >= 5:  # Fim de semana
+        if 0 <= hora_atual < 6:
+            velocidade_esperada = 40  # Madrugada livre
+        elif 6 <= hora_atual < 10:
+            velocidade_esperada = 30  # Manhã tranquila
+        elif 10 <= hora_atual < 18:
+            velocidade_esperada = 28  # Dia normal
+        elif 18 <= hora_atual < 22:
+            velocidade_esperada = 32  # Tarde/noite ok
+        else:
+            velocidade_esperada = 35  # Noite
+    else:  # Dia útil
+        if 0 <= hora_atual < 5:
+            velocidade_esperada = 45  # Madrugada - trânsito livre
+        elif 5 <= hora_atual < 7:
+            velocidade_esperada = 35  # Manhã cedo
+        elif 7 <= hora_atual < 10:
+            velocidade_esperada = 18  # PICO MANHÃ - trânsito pesado
+        elif 10 <= hora_atual < 12:
+            velocidade_esperada = 28  # Meio da manhã
+        elif 12 <= hora_atual < 14:
+            velocidade_esperada = 22  # Horário de almoço
+        elif 14 <= hora_atual < 17:
+            velocidade_esperada = 30  # Tarde normal
+        elif 17 <= hora_atual < 20:
+            velocidade_esperada = 16  # PICO TARDE - trânsito pesado
+        elif 20 <= hora_atual < 23:
+            velocidade_esperada = 32  # Noite
+        else:
+            velocidade_esperada = 38  # Noite tardia
+    
+    try:
+        df_vel = df.groupby('linha').agg({
+            'velocidade': 'mean',
+            'linha': 'count'
+        }).rename(columns={'linha': 'count'}).reset_index()
+        
+        df_vel = df_vel.nlargest(15, 'count')
+    except Exception as e:
+        print(f"❌ Erro no gráfico de velocidade: {e}")
+        return go.Figure()
+    
     df_vel['esperada'] = velocidade_esperada
-    df_vel['diferenca'] = df_vel['velocidade'] - df_vel['esperada']
-    df_vel['status'] = df_vel['diferenca'].apply(lambda x: 'Acima' if x > 0 else 'Abaixo')
     
     fig = go.Figure()
     
-    # Velocidade real
+    # Velocidade real - barras azuis
     fig.add_trace(go.Bar(
         x=df_vel['linha'],
         y=df_vel['velocidade'],
         name='Velocidade Real',
-        marker_color='#2E86AB'
+        marker=dict(
+            color='#4A90B5',  # Azul mais suave
+            line=dict(color='#2E86AB', width=1.5)
+        ),
+        text=df_vel['velocidade'].round(1),
+        textposition='none',
+        hovertemplate='<b>%{x}</b><br>Velocidade: %{y:.1f} km/h<extra></extra>'
     ))
     
-    # Velocidade esperada
+    # Velocidade esperada - linha vermelha tracejada
     fig.add_trace(go.Scatter(
         x=df_vel['linha'],
-        y=df_vel['esperada'],
+        y=[velocidade_esperada] * len(df_vel),
         name='Velocidade Esperada',
-        mode='lines+markers',
-        line=dict(color='red', width=2, dash='dash'),
-        marker=dict(size=8)
+        mode='lines',
+        line=dict(color='#EF4444', width=2.5, dash='dash'),
+        hovertemplate='Esperada: %{y} km/h<extra></extra>'
     ))
     
     fig.update_layout(
-        title='Comparação: Velocidade Real vs Esperada (30 km/h)',
+        title=f'🚀 Análise de Velocidade<br><sub>Comparação: Velocidade Real vs Esperada ({velocidade_esperada} km/h para este horário)</sub>',
         xaxis_title='Linha',
         yaxis_title='Velocidade (km/h)',
         barmode='group',
-        hovermode='x unified'
+        hovermode='x unified',
+        plot_bgcolor='rgba(240,240,240,0.3)',
+        xaxis=dict(
+            showgrid=False,
+            categoryorder='total descending'
+        ),
+        yaxis=dict(
+            showgrid=True,
+            gridcolor='rgba(200,200,200,0.3)',
+            range=[0, max(df_vel['velocidade'].max(), velocidade_esperada) * 1.2]
+        ),
+        legend=dict(
+            orientation="h",
+            yanchor="bottom",
+            y=1.02,
+            xanchor="right",
+            x=1
+        ),
+        margin=dict(t=80, b=60, l=60, r=20)
     )
     
     return fig
@@ -423,13 +505,18 @@ def atualizar_velocidade_eficiencia(n):
     Input('interval-update', 'n_intervals')
 )
 def atualizar_ocupacao(n):
-    """Taxa de ocupação por linha"""
+    """Taxa de ocupação por linha - Top 15"""
     hora_atual = datetime.now().hour
     
-    linhas = df['linha'].unique()
+    try:
+        linhas_top = df['linha'].value_counts().head(15).index.tolist()
+    except Exception as e:
+        print(f"❌ Erro no gráfico de ocupação: {e}")
+        return go.Figure()
+    
     ocupacao_data = []
     
-    for linha in linhas:
+    for linha in linhas_top:
         lotacao = calcular_lotacao_prevista(hora_atual) + np.random.randint(-5, 5)
         ocupacao_data.append({
             'linha': linha,
@@ -437,28 +524,50 @@ def atualizar_ocupacao(n):
         })
     
     df_ocup = pd.DataFrame(ocupacao_data)
-    df_ocup['cor'] = df_ocup['ocupacao'].apply(
-        lambda x: '#EF4444' if x > 85 else '#F59E0B' if x > 70 else '#10B981'
+    
+    fig = go.Figure()
+    
+    # Barras de ocupação - laranja uniforme
+    fig.add_trace(go.Bar(
+        x=df_ocup['linha'],
+        y=df_ocup['ocupacao'],
+        name='Ocupação',
+        marker=dict(
+            color='#F59E0B',  # Laranja uniforme
+            line=dict(color='#D97706', width=1.5)
+        ),
+        text=df_ocup['ocupacao'].apply(lambda x: f'{x:.0f}%'),
+        textposition='outside',
+        textfont=dict(size=11, color='#333'),
+        hovertemplate='<b>%{x}</b><br>Ocupação: %{y:.0f}%<extra></extra>'
+    ))
+    
+    # Linha de limite - vermelha tracejada
+    fig.add_hline(
+        y=85, 
+        line_dash="dash", 
+        line_color="#EF4444",
+        line_width=2.5,
+        annotation_text="Limite",
+        annotation_position="right",
+        annotation=dict(font_size=11, font_color="#EF4444")
     )
     
-    fig = go.Figure(data=[
-        go.Bar(
-            x=df_ocup['linha'],
-            y=df_ocup['ocupacao'],
-            marker_color=df_ocup['cor'],
-            text=df_ocup['ocupacao'].apply(lambda x: f'{x:.0f}%'),
-            textposition='outside'
-        )
-    ])
-    
-    fig.add_hline(y=85, line_dash="dash", line_color="red", 
-                  annotation_text="Limite", annotation_position="right")
-    
     fig.update_layout(
-        title='Taxa de ocupação atual por linha',
+        title='📊 Taxa de Ocupação por Linha<br><sub>Taxa de ocupação atual por linha</sub>',
         xaxis_title='Linha',
         yaxis_title='Ocupação (%)',
-        yaxis_range=[0, 105]
+        yaxis_range=[0, 110],
+        plot_bgcolor='rgba(240,240,240,0.3)',
+        xaxis=dict(
+            showgrid=False
+        ),
+        yaxis=dict(
+            showgrid=True,
+            gridcolor='rgba(200,200,200,0.3)'
+        ),
+        showlegend=False,
+        margin=dict(t=80, b=60, l=60, r=20)
     )
     
     return fig

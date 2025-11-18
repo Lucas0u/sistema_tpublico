@@ -9,24 +9,16 @@ from clima_openmeteo import ClimaOpenMeteo
 
 def autenticar_sptrans(token):
     """Tenta autenticar na API da SPTrans"""
-    url = f"http://api.olhovivo.sptrans.com.br/v2.1/Login/Autenticar?token={token}"
-    
+    url = "http://api.olhovivo.sptrans.com.br/v2.1/Login/Autenticar"
+
     session = requests.Session()
-    try:
-        response = session.post(url)
-        
-        if response.status_code == 200 and response.text == 'true':
-            print("✅ Autenticado com sucesso na SPTrans!")
-            return session
-        else:
-            print(f"❌ Falha na autenticação: Status {response.status_code}")
-            if response.status_code == 404:
-                print("   💡 Token inválido ou expirado. Solicite novo token em:")
-                print("   🔗 https://www.sptrans.com.br/desenvolvedores/")
-            return None
-    except Exception as e:
-        print(f"❌ Erro na autenticação: {e}")
-        return None
+    response = session.post(url, data={"token": token})
+
+    if response.status_code == 200:
+        print("✅ Autenticado com sucesso na SPTrans!")
+        return session
+    else:
+        print(f"❌ Falha na autenticação: {response.status_code}")
 
 def buscar_dados_reais(token):
     """Busca dados reais da SPTrans"""

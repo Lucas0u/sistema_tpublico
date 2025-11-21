@@ -22,21 +22,6 @@ except ImportError:
     CLIMA_DISPONIVEL = False
     print("⚠️ Módulo clima_openmeteo não encontrado")
 
-# Importações de contexto e clima
-try:
-    from contexto_planejamento import obter_resumo_contexto
-    CONTEXTO_DISPONIVEL = True
-except ImportError:
-    CONTEXTO_DISPONIVEL = False
-    print("⚠️ Módulo contexto_planejamento não encontrado")
-
-try:
-    from clima_openmeteo import obter_resumo_clima
-    CLIMA_DISPONIVEL = True
-except ImportError:
-    CLIMA_DISPONIVEL = False
-    print("⚠️ Módulo clima_openmeteo não encontrado")
-
 # Importar módulo NLP
 try:
     from nlp_chat import ChatbotNLP
@@ -97,24 +82,8 @@ LOCAIS_SP = {
     'Liberdade': (-23.5591, -46.6344)
 }
 
-# LOCAIS CONHECIDOS
-LOCAIS_SP = {
-    'Avenida Paulista': (-23.5614, -46.6558),
-    'Centro (Sé)': (-23.5505, -46.6333),
-    'Vila Mariana': (-23.5880, -46.6354),
-    'Pinheiros': (-23.5619, -46.6914),
-    'Itaim Bibi': (-23.5866, -46.6847),
-    'Zona Sul': (-23.6200, -46.6500),
-    'Zona Norte': (-23.5000, -46.6200),
-    'Zona Leste': (-23.5505, -46.4700),
-    'Zona Oeste': (-23.5505, -46.7400),
-    'Consolação': (-23.5552, -46.6611),
-    'Bela Vista': (-23.5611, -46.6514),
-    'Liberdade': (-23.5591, -46.6344)
-}
-
 # Funções auxiliares
-def calcular_lotacao_prevista(hora, dia_semana=None):
+def calcular_lotacao_prevista(hora, dia_semana=None, linha=None):
     """
     Calcula previsão de lotação baseada em padrões históricos
     NOTA: API SPTrans não fornece dados de ocupação em tempo real
@@ -124,6 +93,7 @@ def calcular_lotacao_prevista(hora, dia_semana=None):
             if dia_semana is None:
                 dia_semana = datetime.now().weekday()
             
+            # Calcular velocidade média baseada na linha, se fornecida
             if linha and linha in df['linha'].values:
                 vel_media = df[df['linha'] == linha]['velocidade'].mean()
             else:
@@ -133,10 +103,10 @@ def calcular_lotacao_prevista(hora, dia_semana=None):
             previsao = modelo.predict(previsao_df)[0]
             variacao = np.random.normal(0, 3)
             return max(10, min(100, previsao + variacao))
-        except:
+        except Exception as e:
             pass
     
-    # Predição baseada em padrões conhecidos de SP
+    # Predição baseada em padrões conhecidos de SP (fallback)
     if dia_semana is None:
         dia_semana = datetime.now().weekday()
     
@@ -323,12 +293,10 @@ app.layout = html.Div([
     # Análise de Eficiência
     html.Div([
         html.Div([
-            html.H3("🚀 Velocidade: Real vs Esperada", className='section-title'),
             dcc.Graph(id='grafico-velocidade-eficiencia', className='graph-medium'),
         ], className='card card-half'),
         
         html.Div([
-            html.H3("📊 Taxa de Ocupação Atual", className='section-title'),
             dcc.Graph(id='grafico-ocupacao', className='graph-medium'),
         ], className='card card-half'),
     ], className='efficiency-container'),
@@ -413,34 +381,83 @@ def incrementar_contador(n_clicks, contador):
 def atualizar_mapa_e_stats(contador):
     df_map = df.copy()
     hora_atual = datetime.now().hour
+    dia_semana = datetime.now().weekday()
     
-    df_map['lotacao'] = df_map['linha'].apply(
-        lambda linha: calcular_lotacao_realista(hora_atual, linha=linha)
+    # Calcular lotação base por linha
+    df_map['lotacao_base'] = df_map['linha'].apply(
+        lambda linha: calcular_lotacao_prevista(hora_atual, dia_semana, linha)
     )
-    df_map['lotacao'] = df_map['lotacao'].clip(10, 100)
     
-    fig = px.scatter_mapbox(
-        df_map,
-        lat='lat',
-        lon='lon',
-        color='lotacao',
-        size='lotacao',
-        hover_data={'linha': True, 'velocidade': True, 'lotacao': ':.0f', 'lat': False, 'lon': False},
-        color_continuous_scale=['#27ae60', '#f1c40f', '#e67e22', '#e74c3c'],
-        range_color=[0, 100],
-        size_max=20,
-        zoom=11,
-        mapbox_style='carto-positron',
-        labels={'lotacao': 'Lotação (%)'}
+    # Adicionar variação individual por veículo baseada em velocidade
+    # Veículos mais lentos tendem a estar mais cheios
+    velocidade_media = df_map['velocidade'].mean()
+    df_map['fator_velocidade'] = df_map['velocidade'].apply(
+        lambda v: -10 if v < velocidade_media * 0.7 else 10 if v > velocidade_media * 1.3 else 0
     )
+    
+    # Adicionar variação aleatória pequena para simular realismo
+    np.random.seed(int(hora_atual * 100 + dia_semana))
+    df_map['variacao'] = np.random.randint(-8, 8, len(df_map))
+    
+    # Calcular lotação final
+    df_map['lotacao'] = df_map['lotacao_base'] + df_map['fator_velocidade'] + df_map['variacao']
+    df_map['lotacao'] = df_map['lotacao'].clip(15, 98)
+    
+    # Definir cor baseada na lotação
+    def get_color(lotacao):
+        if lotacao >= 85:
+            return '#e74c3c'  # Vermelho
+        elif lotacao >= 70:
+            return '#e67e22'  # Laranja
+        elif lotacao >= 50:
+            return '#f1c40f'  # Amarelo
+        else:
+            return '#27ae60'  # Verde
+    
+    df_map['cor'] = df_map['lotacao'].apply(get_color)
+    
+    # Criar figura com scatter_mapbox
+    fig = go.Figure()
+    
+    # Adicionar pontos por cor para criar legenda
+    for cor, label in [('#27ae60', 'OK (0-50%)'), 
+                       ('#f1c40f', 'Moderado (50-70%)'), 
+                       ('#e67e22', 'Cheio (70-85%)'), 
+                       ('#e74c3c', 'Lotado (85%+)')]:
+        df_cor = df_map[df_map['cor'] == cor]
+        if len(df_cor) > 0:
+            fig.add_trace(go.Scattermapbox(
+                lat=df_cor['lat'],
+                lon=df_cor['lon'],
+                mode='markers',
+                marker=dict(
+                    size=df_cor['lotacao'] / 8,  # Tamanho proporcional mas menor
+                    color=cor,
+                    opacity=0.7,
+                    sizemode='diameter'
+                ),
+                text=df_cor.apply(lambda row: f"Linha: {row['linha']}<br>Lotação: {row['lotacao']:.0f}%<br>Velocidade: {row['velocidade']:.1f} km/h", axis=1),
+                hoverinfo='text',
+                name=label,
+                showlegend=True
+            ))
     
     fig.update_layout(
+        mapbox=dict(
+            style='carto-positron',
+            center=dict(lat=-23.5505, lon=-46.6333),
+            zoom=11
+        ),
         margin=dict(l=0, r=0, t=0, b=0),
-        coloraxis_colorbar=dict(
-            title="Lotação (%)",
-            tickvals=[25, 50, 75, 100],
-            ticktext=['25%', '50%', '75%', '100%']
-        )
+        showlegend=True,
+        legend=dict(
+            yanchor="top",
+            y=0.99,
+            xanchor="left",
+            x=0.01,
+            bgcolor="rgba(255,255,255,0.9)"
+        ),
+        hovermode='closest'
     )
     
     lotacao_media = df_map['lotacao'].mean()
@@ -505,7 +522,7 @@ def atualizar_previsao_diaria(contador):
     Input('contador-atualizacoes', 'data')
 )
 def atualizar_velocidade_eficiencia(n):
-    """Análise de velocidade média vs esperada - Top 15 linhas"""
+    """Análise de velocidade média com lotação individual por linha"""
     
     # Calcular velocidade esperada dinâmica baseada no horário
     hora_atual = datetime.now().hour
@@ -514,34 +531,34 @@ def atualizar_velocidade_eficiencia(n):
     # Velocidade esperada varia com horário e dia
     if dia_semana >= 5:  # Fim de semana
         if 0 <= hora_atual < 6:
-            velocidade_esperada = 40  # Madrugada livre
+            velocidade_esperada = 40
         elif 6 <= hora_atual < 10:
-            velocidade_esperada = 30  # Manhã tranquila
+            velocidade_esperada = 30
         elif 10 <= hora_atual < 18:
-            velocidade_esperada = 28  # Dia normal
+            velocidade_esperada = 28
         elif 18 <= hora_atual < 22:
-            velocidade_esperada = 32  # Tarde/noite ok
+            velocidade_esperada = 32
         else:
-            velocidade_esperada = 35  # Noite
+            velocidade_esperada = 35
     else:  # Dia útil
         if 0 <= hora_atual < 5:
-            velocidade_esperada = 45  # Madrugada - trânsito livre
+            velocidade_esperada = 45
         elif 5 <= hora_atual < 7:
-            velocidade_esperada = 35  # Manhã cedo
+            velocidade_esperada = 35
         elif 7 <= hora_atual < 10:
-            velocidade_esperada = 18  # PICO MANHÃ - trânsito pesado
+            velocidade_esperada = 18
         elif 10 <= hora_atual < 12:
-            velocidade_esperada = 28  # Meio da manhã
+            velocidade_esperada = 28
         elif 12 <= hora_atual < 14:
-            velocidade_esperada = 22  # Horário de almoço
+            velocidade_esperada = 22
         elif 14 <= hora_atual < 17:
-            velocidade_esperada = 30  # Tarde normal
+            velocidade_esperada = 30
         elif 17 <= hora_atual < 20:
-            velocidade_esperada = 16  # PICO TARDE - trânsito pesado
+            velocidade_esperada = 16
         elif 20 <= hora_atual < 23:
-            velocidade_esperada = 32  # Noite
+            velocidade_esperada = 32
         else:
-            velocidade_esperada = 38  # Noite tardia
+            velocidade_esperada = 38
     
     try:
         df_vel = df.groupby('linha').agg({
@@ -549,63 +566,92 @@ def atualizar_velocidade_eficiencia(n):
             'linha': 'count'
         }).rename(columns={'linha': 'count'}).reset_index()
         
-        df_vel = df_vel.nlargest(15, 'count')
+        df_vel = df_vel.nlargest(10, 'count').sort_values('velocidade', ascending=True)
+        df_vel['diferenca'] = df_vel['velocidade'] - velocidade_esperada
+        df_vel['status'] = df_vel['diferenca'].apply(
+            lambda x: 'Acima' if x > 5 else 'Abaixo' if x < -5 else 'Normal'
+        )
+        
+        # Calcular lotação individual por linha
+        df_vel['lotacao'] = df_vel['linha'].apply(
+            lambda linha: calcular_lotacao_prevista(hora_atual, dia_semana, linha)
+        )
+        
     except Exception as e:
         print(f"❌ Erro no gráfico de velocidade: {e}")
         return go.Figure()
     
-    df_vel['esperada'] = velocidade_esperada
+    # Cores baseadas na lotação
+    def get_cor_lotacao(lotacao):
+        if lotacao >= 85:
+            return '#000000'  # Preto - lotado
+        elif lotacao >= 70:
+            return '#404040'  # Cinza escuro - cheio
+        elif lotacao >= 50:
+            return '#737373'  # Cinza médio - moderado
+        else:
+            return '#a3a3a3'  # Cinza claro - ok
+    
+    cores = df_vel['lotacao'].apply(get_cor_lotacao)
     
     fig = go.Figure()
     
-    # Velocidade real - barras azuis
+    # Formatar nomes das linhas para melhor legibilidade
+    df_vel['linha_formatada'] = df_vel.apply(
+        lambda row: f"🚌 {row['linha']} ({'Lotado' if row['lotacao'] >= 85 else 'Cheio' if row['lotacao'] >= 70 else 'Moderado' if row['lotacao'] >= 50 else 'OK'})",
+        axis=1
+    )
+    
+    # Barras horizontais para melhor legibilidade
     fig.add_trace(go.Bar(
-        x=df_vel['linha'],
-        y=df_vel['velocidade'],
-        name='Velocidade Real',
+        y=df_vel['linha_formatada'],
+        x=df_vel['velocidade'],
+        orientation='h',
         marker=dict(
-            color='#4A90B5',  # Azul mais suave
-            line=dict(color='#2E86AB', width=1.5)
+            color=cores,
+            line=dict(color='#000000', width=1.5),
+            opacity=0.85
         ),
-        text=df_vel['velocidade'].round(1),
-        textposition='none',
-        hovertemplate='<b>%{x}</b><br>Velocidade: %{y:.1f} km/h<extra></extra>'
+        text=df_vel.apply(lambda row: f"<b>{row['velocidade']:.1f}</b> km/h | <b>{row['lotacao']:.0f}%</b>", axis=1),
+        textposition='outside',
+        textfont=dict(size=12, color='#000000', family='Arial Black'),
+        hovertemplate='<b>Linha %{customdata[0]}</b><br>Velocidade: %{x:.1f} km/h<br>Lotação: %{customdata[1]:.0f}%<br>Status: %{customdata[2]}<extra></extra>',
+        customdata=df_vel[['linha', 'lotacao', 'status']].values
     ))
     
-    # Velocidade esperada - linha vermelha tracejada
-    fig.add_trace(go.Scatter(
-        x=df_vel['linha'],
-        y=[velocidade_esperada] * len(df_vel),
-        name='Velocidade Esperada',
-        mode='lines',
-        line=dict(color='#EF4444', width=2.5, dash='dash'),
-        hovertemplate='Esperada: %{y} km/h<extra></extra>'
-    ))
+    # Linha vertical de referência
+    fig.add_vline(
+        x=velocidade_esperada,
+        line_dash="dash",
+        line_color="#000000",
+        line_width=2,
+        annotation_text=f"Esperado:<br>{velocidade_esperada} km/h",
+        annotation_position="top right",
+        annotation=dict(
+            font_size=11, 
+            font_color="#000000", 
+            bgcolor="rgba(255,255,255,0.95)",
+            bordercolor="#000000",
+            borderwidth=1
+        )
+    )
     
     fig.update_layout(
-        title=f'🚀 Análise de Velocidade<br><sub>Comparação: Velocidade Real vs Esperada ({velocidade_esperada} km/h para este horário)</sub>',
-        xaxis_title='Linha',
-        yaxis_title='Velocidade (km/h)',
-        barmode='group',
-        hovermode='x unified',
-        plot_bgcolor='rgba(240,240,240,0.3)',
+        title=f'🚀 Velocidade e Lotação por Linha<br><sub>Cor indica lotação: Claro (OK) → Escuro (Lotado)</sub>',
+        xaxis_title='Velocidade (km/h)',
+        yaxis_title='',
+        plot_bgcolor='white',
         xaxis=dict(
-            showgrid=False,
-            categoryorder='total descending'
-        ),
-        yaxis=dict(
             showgrid=True,
             gridcolor='rgba(200,200,200,0.3)',
-            range=[0, max(df_vel['velocidade'].max(), velocidade_esperada) * 1.2]
+            range=[0, max(df_vel['velocidade'].max(), velocidade_esperada) * 1.4]
         ),
-        legend=dict(
-            orientation="h",
-            yanchor="bottom",
-            y=1.02,
-            xanchor="right",
-            x=1
+        yaxis=dict(
+            showgrid=False,
+            automargin=True
         ),
-        margin=dict(t=80, b=60, l=60, r=20)
+        height=400,
+        margin=dict(t=80, b=50, l=120, r=180)
     )
     
     return fig
@@ -615,70 +661,152 @@ def atualizar_velocidade_eficiencia(n):
     Input('contador-atualizacoes', 'data')
 )
 def atualizar_ocupacao(n):
-    """Taxa de ocupação por linha - Top 15"""
+    """Taxa de ocupação individual por linha - Top 10 linhas"""
     hora_atual = datetime.now().hour
-    df_ocup = calcular_lotacao_por_linha(hora_atual)
+    dia_semana = datetime.now().weekday()
     
     try:
-        linhas_top = df['linha'].value_counts().head(15).index.tolist()
+        linhas_top = df['linha'].value_counts().head(10).index.tolist()
     except Exception as e:
         print(f"❌ Erro no gráfico de ocupação: {e}")
         return go.Figure()
     
     ocupacao_data = []
     
+    # Calcular lotação individual para cada linha
     for linha in linhas_top:
-        lotacao = calcular_lotacao_prevista(hora_atual) + np.random.randint(-5, 5)
+        # Lotação base por linha
+        lotacao_base = calcular_lotacao_prevista(hora_atual, dia_semana, linha)
+        
+        # Adicionar pequena variação
+        variacao = np.random.randint(-3, 3)
+        lotacao = max(15, min(98, lotacao_base + variacao))
+        
+        # Classificar nível
+        if lotacao >= 85:
+            nivel = 'Crítico'
+        elif lotacao >= 70:
+            nivel = 'Alto'
+        elif lotacao >= 50:
+            nivel = 'Moderado'
+        else:
+            nivel = 'Normal'
+        
         ocupacao_data.append({
             'linha': linha,
-            'ocupacao': max(0, min(100, lotacao))
+            'ocupacao': lotacao,
+            'nivel': nivel
         })
     
-    df_ocup = pd.DataFrame(ocupacao_data)
+    df_ocup = pd.DataFrame(ocupacao_data).sort_values('ocupacao', ascending=True)
+    
+    # Cores por nível (escala de cinza)
+    cores = df_ocup['nivel'].map({
+        'Crítico': '#000000',    # Preto
+        'Alto': '#404040',       # Cinza escuro
+        'Moderado': '#737373',   # Cinza médio
+        'Normal': '#a3a3a3'      # Cinza claro
+    })
     
     fig = go.Figure()
     
-    # Barras de ocupação - laranja uniforme
+    # Formatar nomes das linhas com emoji de status
+    def get_emoji_status(nivel):
+        if nivel == 'Crítico':
+            return '🔴'
+        elif nivel == 'Alto':
+            return '🟠'
+        elif nivel == 'Moderado':
+            return '🟡'
+        else:
+            return '🟢'
+    
+    df_ocup['linha_formatada'] = df_ocup.apply(
+        lambda row: f"{get_emoji_status(row['nivel'])} {row['linha']}",
+        axis=1
+    )
+    
+    # Barras horizontais com valores individuais
     fig.add_trace(go.Bar(
-        x=df_ocup['linha'],
-        y=df_ocup['ocupacao'],
-        name='Ocupação',
+        y=df_ocup['linha_formatada'],
+        x=df_ocup['ocupacao'],
+        orientation='h',
         marker=dict(
-            color='#F59E0B',  # Laranja uniforme
-            line=dict(color='#D97706', width=1.5)
+            color=cores,
+            line=dict(color='#000000', width=1.5),
+            opacity=0.85
         ),
-        text=df_ocup['ocupacao'].apply(lambda x: f'{x:.0f}%'),
+        text=df_ocup.apply(lambda row: f"<b>{row['ocupacao']:.0f}%</b> • {row['nivel']}", axis=1),
         textposition='outside',
-        textfont=dict(size=11, color='#333'),
-        hovertemplate='<b>%{x}</b><br>Ocupação: %{y:.0f}%<extra></extra>'
+        textfont=dict(size=12, color='#000000', family='Arial Black'),
+        hovertemplate='<b>Linha %{customdata[0]}</b><br>Ocupação: %{x:.0f}%<br>Nível: %{customdata[1]}<br><extra></extra>',
+        customdata=df_ocup[['linha', 'nivel']].values
     ))
     
-    # Linha de limite - vermelha tracejada
-    fig.add_hline(
-        y=85, 
+    # Linhas de referência com labels
+    fig.add_vline(
+        x=50, 
+        line_dash="dot", 
+        line_color="#a3a3a3", 
+        line_width=1.5,
+        annotation_text="Normal<br>50%", 
+        annotation_position="top",
+        annotation=dict(
+            font_size=9, 
+            bgcolor="rgba(255,255,255,0.95)",
+            bordercolor="#a3a3a3",
+            borderwidth=1
+        )
+    )
+    
+    fig.add_vline(
+        x=70, 
+        line_dash="dot", 
+        line_color="#737373", 
+        line_width=1.5,
+        annotation_text="Alto<br>70%", 
+        annotation_position="top",
+        annotation=dict(
+            font_size=9, 
+            bgcolor="rgba(255,255,255,0.95)",
+            bordercolor="#737373",
+            borderwidth=1
+        )
+    )
+    
+    fig.add_vline(
+        x=85, 
         line_dash="dash", 
-        line_color="#EF4444",
-        line_width=2.5,
-        annotation_text="Limite",
-        annotation_position="right",
-        annotation=dict(font_size=11, font_color="#EF4444")
+        line_color="#000000", 
+        line_width=2,
+        annotation_text="Crítico<br>85%", 
+        annotation_position="top right",
+        annotation=dict(
+            font_size=10, 
+            font_color="#000000", 
+            bgcolor="rgba(255,255,255,0.95)",
+            bordercolor="#000000",
+            borderwidth=1
+        )
     )
     
     fig.update_layout(
-        title='📊 Taxa de Ocupação por Linha<br><sub>Taxa de ocupação atual por linha</sub>',
-        xaxis_title='Linha',
-        yaxis_title='Ocupação (%)',
-        yaxis_range=[0, 110],
-        plot_bgcolor='rgba(240,240,240,0.3)',
+        title='📊 Lotação Individual por Linha<br><sub>Cada linha com sua taxa de ocupação específica</sub>',
+        xaxis_title='Ocupação (%)',
+        yaxis_title='',
+        xaxis_range=[0, 115],
+        plot_bgcolor='white',
         xaxis=dict(
-            showgrid=False
-        ),
-        yaxis=dict(
             showgrid=True,
             gridcolor='rgba(200,200,200,0.3)'
         ),
+        yaxis=dict(
+            showgrid=False,
+            automargin=True
+        ),
+        height=400,
         showlegend=False,
-        margin=dict(t=80, b=60, l=60, r=20)
+        margin=dict(t=80, b=50, l=120, r=180)
     )
     
     return fig
@@ -835,7 +963,7 @@ def calcular_rota_otimizada(n_clicks, origem, destino):
     prevent_initial_call=True
 )
 def responder_chat(n_clicks, pergunta):
-    if n_clicks and pergunta:
+    if n_clicks and pergunta and pergunta.strip():
         if chatbot:
             resposta = chatbot.gerar_resposta(pergunta)
         else:
@@ -843,7 +971,39 @@ def responder_chat(n_clicks, pergunta):
         
         return resposta
     
-    return "💡 Faça uma pergunta sobre transporte público!"
+    # Mensagem de instruções quando vazio ou sem pergunta
+    return """💡 **Como posso ajudar? Escolha um exemplo abaixo:**
+
+**📊 Perguntas sobre LOTAÇÃO:**
+• "Qual a lotação do ônibus?"
+• "Como está a lotação da linha 175T-10?"
+• "O ônibus está cheio?"
+
+**⏱️ Perguntas sobre TEMPO DE ESPERA:**
+• "Quanto tempo de espera?"
+• "Quanto tempo vou esperar?"
+• "Qual o tempo médio de espera?"
+
+**🗺️ Perguntas sobre ROTAS:**
+• "Qual a melhor rota?"
+• "Como chegar na Avenida Paulista?"
+• "Melhor caminho para o Centro?"
+
+**🚌 Perguntas sobre LINHAS:**
+• "Quais linhas disponíveis?"
+• "Qual ônibus passa aqui?"
+• "Linhas que atendem a região?"
+
+**🚀 Perguntas sobre VELOCIDADE:**
+• "Qual a velocidade dos ônibus?"
+• "Como está a velocidade?"
+• "Ônibus estão rápidos ou lentos?"
+
+**🕐 Perguntas sobre HORÁRIOS DE PICO:**
+• "Quais os horários de pico?"
+• "Quando está mais movimentado?"
+• "Melhor horário para andar de ônibus?"
+"""
 
 if __name__ == '__main__':
     print("\n" + "="*60)

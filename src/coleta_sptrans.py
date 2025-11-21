@@ -9,6 +9,13 @@ from math import radians, cos, sin, asin, sqrt
 from contexto_planejamento import ContextoPlanejamento
 from clima_openmeteo import ClimaOpenMeteo
 
+def validar_coordenadas_sp(lat, lon):
+    """
+    Valida se as coordenadas estão dentro da região metropolitana de São Paulo
+    Lat: -23.8 a -23.3 | Lon: -46.9 a -46.3
+    """
+    return (-23.8 <= lat <= -23.3) and (-46.9 <= lon <= -46.3)
+
 def haversine(lon1, lat1, lon2, lat2):
     """Calcula distância entre dois pontos em km usando fórmula de Haversine"""
     lon1, lat1, lon2, lat2 = map(radians, [lon1, lat1, lon2, lat2])
@@ -70,6 +77,7 @@ def autenticar_sptrans(token):
         return session
     else:
         print(f"❌ Falha na autenticação: {response.status_code}")
+        return None
 
 def buscar_dados_reais(token):
     """Busca dados reais da SPTrans"""
@@ -101,23 +109,32 @@ def buscar_dados_reais(token):
                         if not veiculo:
                             continue
                         
+                        # Extrair coordenadas
+                        lat = veiculo.get('py', 0)
+                        lon = veiculo.get('px', 0)
+                        
+                        # Validar coordenadas antes de adicionar
+                        if not validar_coordenadas_sp(lat, lon):
+                            continue  # Pular veículos com coordenadas inválidas
+                        
                         # Velocidade inicial = 0 (será calculada depois baseada em histórico)
                         velocidade = 0
                         
                         linhas.append({
                             'linha': str(codigo_linha),
                             'velocidade': velocidade,
-                            'lat': veiculo.get('py', 0),
-                            'lon': veiculo.get('px', 0),
+                            'lat': lat,
+                            'lon': lon,
                             'timestamp': datetime.now()
                         })
                 
                 if len(linhas) == 0:
-                    print("   ⚠️ API não retornou nenhum veículo ativo")
+                    print("   ⚠️ API não retornou nenhum veículo ativo ou todos com coordenadas inválidas")
                     print("   💡 Usando dados de exemplo em seu lugar")
                     return None
                 
                 df = pd.DataFrame(linhas)
+                df['fonte_dados'] = 'real'  # Flag indicando dados reais da API
                 print(f"   ✅ {len(df)} veículos coletados da API")
                 return df
             else:
@@ -131,6 +148,7 @@ def buscar_dados_reais(token):
 def criar_dados_exemplo():
     """Cria dados de exemplo quando a API falha"""
     print("🔄 Criando dados de exemplo...")
+    print("⚠️  ATENÇÃO: Usando dados SIMULADOS, não dados reais da SPTrans")
     
     np.random.seed(42)
     linhas = ['175T-10', '701U-10', '702U-10', '877T-10', '501U-10']
@@ -151,6 +169,7 @@ def criar_dados_exemplo():
         })
     
     df = pd.DataFrame(dados)
+    df['fonte_dados'] = 'simulado'  # Flag indicando dados mockados
     return df
 
 
@@ -265,9 +284,9 @@ def main():
     # Se falhar ou retornar poucos dados, usar dados de exemplo
     if df is None or len(df) == 0:
         df = criar_dados_exemplo()
-        print("📊 Dados de exemplo criados")
+        print("📊 Dados de exemplo criados (fonte: simulado)")
     else:
-        print(f"📊 Dados reais coletados da SPTrans: {len(df)} veículos")
+        print(f"📊 Dados reais coletados da SPTrans: {len(df)} veículos (fonte: real)")
         
         if historico_anterior is not None:
             print("   🧮 Calculando velocidades baseadas em mudanças de posição...")

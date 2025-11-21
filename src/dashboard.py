@@ -972,34 +972,34 @@ def responder_chat(n_clicks, pergunta):
         return resposta
     
     # Mensagem de instruções quando vazio ou sem pergunta
-    return """💡 **Como posso ajudar? Escolha um exemplo abaixo:**
+    return """Escolha um exemplo abaixo:
 
-**📊 Perguntas sobre LOTAÇÃO:**
+📊 Perguntas sobre LOTAÇÃO:
 • "Qual a lotação do ônibus?"
 • "Como está a lotação da linha 175T-10?"
 • "O ônibus está cheio?"
 
-**⏱️ Perguntas sobre TEMPO DE ESPERA:**
+⏱️ Perguntas sobre TEMPO DE ESPERA:
 • "Quanto tempo de espera?"
 • "Quanto tempo vou esperar?"
 • "Qual o tempo médio de espera?"
 
-**🗺️ Perguntas sobre ROTAS:**
+🗺️ Perguntas sobre ROTAS:
 • "Qual a melhor rota?"
 • "Como chegar na Avenida Paulista?"
 • "Melhor caminho para o Centro?"
 
-**🚌 Perguntas sobre LINHAS:**
+🚌 Perguntas sobre LINHAS:
 • "Quais linhas disponíveis?"
 • "Qual ônibus passa aqui?"
 • "Linhas que atendem a região?"
 
-**🚀 Perguntas sobre VELOCIDADE:**
+🚀 Perguntas sobre VELOCIDADE:
 • "Qual a velocidade dos ônibus?"
 • "Como está a velocidade?"
 • "Ônibus estão rápidos ou lentos?"
 
-**🕐 Perguntas sobre HORÁRIOS DE PICO:**
+🕐 Perguntas sobre HORÁRIOS DE PICO:
 • "Quais os horários de pico?"
 • "Quando está mais movimentado?"
 • "Melhor horário para andar de ônibus?"

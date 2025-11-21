@@ -3,22 +3,81 @@ import pandas as pd
 import numpy as np
 from datetime import datetime, timedelta
 import os
+import pickle
+from math import radians, cos, sin, asin, sqrt
 
 from contexto_planejamento import ContextoPlanejamento
 from clima_openmeteo import ClimaOpenMeteo
 
+def validar_coordenadas_sp(lat, lon):
+    """
+    Valida se as coordenadas estão dentro da região metropolitana de São Paulo
+    Lat: -23.8 a -23.3 | Lon: -46.9 a -46.3
+    """
+    return (-23.8 <= lat <= -23.3) and (-46.9 <= lon <= -46.3)
+
+def haversine(lon1, lat1, lon2, lat2):
+    """Calcula distância entre dois pontos em km usando fórmula de Haversine"""
+    lon1, lat1, lon2, lat2 = map(radians, [lon1, lat1, lon2, lat2])
+    dlon = lon2 - lon1
+    dlat = lat2 - lat1
+    a = sin(dlat/2)**2 + cos(lat1) * cos(lat2) * sin(dlon/2)**2
+    c = 2 * asin(sqrt(a))
+    km = 6371 * c
+    return km
+
+def calcular_velocidade_historico(df_atual, historico_anterior):
+    """Calcula velocidade baseado em posições anteriores"""
+    if historico_anterior is None or len(historico_anterior) == 0:
+        return df_atual
+    
+    df_resultado = df_atual.copy()
+    velocidades_calculadas = []
+    
+    for idx, row in df_resultado.iterrows():
+        # Buscar veículo no histórico (mesmo na mesma linha)
+        veiculo_historico = historico_anterior[
+            (historico_anterior['linha'] == row['linha'])
+        ]
+        
+        if len(veiculo_historico) > 0:
+            # Pegar posição mais recente deste veículo
+            ultimo = veiculo_historico.iloc[-1]
+            
+            # Calcular distância percorrida
+            dist_km = haversine(ultimo['lon'], ultimo['lat'], row['lon'], row['lat'])
+            
+            # Calcular tempo decorrido (em horas)
+            tempo_diff = (row['timestamp'] - ultimo['timestamp']).total_seconds() / 3600
+            
+            # Calcular velocidade (km/h)
+            if tempo_diff > 0 and dist_km > 0.001:  # Mínimo 1 metro
+                velocidade = dist_km / tempo_diff
+                # Limitar velocidade a valores realísticos (0-100 km/h)
+                velocidade = min(max(velocidade, 0), 100)
+            else:
+                velocidade = 0
+            
+            velocidades_calculadas.append(velocidade)
+        else:
+            velocidades_calculadas.append(0)
+    
+    df_resultado['velocidade'] = velocidades_calculadas
+    return df_resultado
+
 def autenticar_sptrans(token):
     """Tenta autenticar na API da SPTrans"""
-    url = "http://api.olhovivo.sptrans.com.br/v2.1/Login/Autenticar"
+    url = f"http://api.olhovivo.sptrans.com.br/v2.1/Login/Autenticar?token={token}"
 
     session = requests.Session()
-    response = session.post(url, data={"token": token})
+    response = session.post(url)
 
     if response.status_code == 200:
         print("✅ Autenticado com sucesso na SPTrans!")
         return session
     else:
         print(f"❌ Falha na autenticação: {response.status_code}")
+        return None
 
 def buscar_dados_reais(token):
     """Busca dados reais da SPTrans"""
@@ -44,23 +103,38 @@ def buscar_dados_reais(token):
                     if not linha:
                         continue
                     veiculos = linha.get('vs', [])
+                    codigo_linha = linha.get('c', '')
+                    
                     for veiculo in veiculos:
                         if not veiculo:
                             continue
+                        
+                        # Extrair coordenadas
+                        lat = veiculo.get('py', 0)
+                        lon = veiculo.get('px', 0)
+                        
+                        # Validar coordenadas antes de adicionar
+                        if not validar_coordenadas_sp(lat, lon):
+                            continue  # Pular veículos com coordenadas inválidas
+                        
+                        # Velocidade inicial = 0 (será calculada depois baseada em histórico)
+                        velocidade = 0
+                        
                         linhas.append({
-                            'linha': linha.get('c', ''),
-                            'velocidade': veiculo.get('v', 0),
-                            'lat': veiculo.get('py', 0),
-                            'lon': veiculo.get('px', 0),
+                            'linha': str(codigo_linha),
+                            'velocidade': velocidade,
+                            'lat': lat,
+                            'lon': lon,
                             'timestamp': datetime.now()
                         })
                 
                 if len(linhas) == 0:
-                    print("   ⚠️ API não retornou nenhum veículo ativo")
+                    print("   ⚠️ API não retornou nenhum veículo ativo ou todos com coordenadas inválidas")
                     print("   💡 Usando dados de exemplo em seu lugar")
                     return None
                 
                 df = pd.DataFrame(linhas)
+                df['fonte_dados'] = 'real'  # Flag indicando dados reais da API
                 print(f"   ✅ {len(df)} veículos coletados da API")
                 return df
             else:
@@ -74,6 +148,7 @@ def buscar_dados_reais(token):
 def criar_dados_exemplo():
     """Cria dados de exemplo quando a API falha"""
     print("🔄 Criando dados de exemplo...")
+    print("⚠️  ATENÇÃO: Usando dados SIMULADOS, não dados reais da SPTrans")
     
     np.random.seed(42)
     linhas = ['175T-10', '701U-10', '702U-10', '877T-10', '501U-10']
@@ -94,6 +169,7 @@ def criar_dados_exemplo():
         })
     
     df = pd.DataFrame(dados)
+    df['fonte_dados'] = 'simulado'  # Flag indicando dados mockados
     return df
 
 
@@ -191,6 +267,16 @@ def main():
     token = "2a80206e20b1d3be63305d9e703cf2bcc761384f8826975b4c6b55deb70425e9"
     
     print("🚌 Iniciando coleta de dados de transporte público...")
+
+    historico_path = 'dados/historico_posicoes.pkl'
+    historico_anterior = None
+    if os.path.exists(historico_path):
+        try:
+            with open(historico_path, 'rb') as f:
+                historico_anterior = pickle.load(f)
+            print("   📂 Histórico anterior carregado")
+        except:
+            pass
     
     # Tentar dados reais primeiro
     df = buscar_dados_reais(token)
@@ -198,9 +284,21 @@ def main():
     # Se falhar ou retornar poucos dados, usar dados de exemplo
     if df is None or len(df) == 0:
         df = criar_dados_exemplo()
-        print("📊 Dados de exemplo criados")
+        print("📊 Dados de exemplo criados (fonte: simulado)")
     else:
-        print(f"📊 Dados reais coletados da SPTrans: {len(df)} veículos")
+        print(f"📊 Dados reais coletados da SPTrans: {len(df)} veículos (fonte: real)")
+        
+        if historico_anterior is not None:
+            print("   🧮 Calculando velocidades baseadas em mudanças de posição...")
+            df = calcular_velocidade_historico(df, historico_anterior)
+            velocidades_nao_zero = (df['velocidade'] > 0).sum()
+            print(f"   ✅ {velocidades_nao_zero} veículos com velocidade calculada")
+  
+        try:
+            with open(historico_path, 'wb') as f:
+                pickle.dump(df[['linha', 'lat', 'lon', 'timestamp']], f)
+        except:
+            pass
     
     df = adicionar_contexto_planejamento(df)
     

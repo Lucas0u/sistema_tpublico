@@ -13,8 +13,10 @@ def gerar_relatorio_predicao():
     
     try:
         # Carregar modelo treinado
-        modelo = joblib.load('dados/modelo_final.pkl')
-        features = joblib.load('dados/features_finais.pkl')
+        try:
+            features = joblib.load('dados/features.pkl')
+        except FileNotFoundError:
+            features = ['demanda', 'clima', 'dia_semana', 'hora']
         
         # Dados das previsões (usando os resultados do ARIMA + RF)
         dados_linhas = {

@@ -1,7 +1,7 @@
 # 📊 RELATÓRIO DE PREDIÇÃO - ARIMA + RANDOM FOREST
 
 ## 📅 Data de Geração
-17/11/2025 19:02
+21/11/2025 19:34
 
 ## 🎯 Objetivo
 Relatório das previsões de demanda de passageiros por linha de ônibus utilizando modelo híbrido ARIMA + Random Forest.
@@ -9,7 +9,7 @@ Relatório das previsões de demanda de passageiros por linha de ônibus utiliza
 ## 🤖 Modelo Utilizado
 - **Algoritmo:** ARIMA (1,1,1) + Random Forest Regressor
 - **Combinação:** 70% Random Forest + 30% ARIMA
-- **Features:** ['hora', 'dia_semana', 'fim_de_semana', 'velocidade_media']
+- **Features:** ['hora', 'dia_semana', 'velocidade', 'fim_de_semana', 'em_periodo_pico', 'rodizio_ativo', 'feriado_flag', 'tem_evento_relevante', 'periodo_pico_codigo', 'temperatura', 'umidade', 'precipitacao', 'tem_chuva', 'temperatura_categoria_codigo', 'umidade_alta']
 - **Período de Treinamento:** 100 registros temporais
 - **Horizonte de Previsão:** 3 períodos à frente
 
